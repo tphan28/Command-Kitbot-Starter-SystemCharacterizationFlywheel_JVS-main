@@ -95,6 +95,15 @@ public class Flywheel extends SubsystemBase {
     // target vs. measured velocity for the Slot0/VelocityVoltage path.
     private double m_lastSlot0TargetRPM = 0.0;
 
+    // Last kP value written to the TalonFX's Slot0, so periodic() can tell
+    // when the SmartDashboard-tunable kP has changed and needs re-applying.
+    private double m_lastAppliedSlot0kP = kFlywheelSlot0_kP;
+
+    // SmartDashboard keys for live-tunable Slot0 kP and target RPM, read back
+    // and re-applied each periodic() so they can be adjusted without redeploying.
+    private static final String kTunableSlot0kPKey = "Flywheel/Slot0 Tunable kP";
+    private static final String kTunableSlot0TargetRPMKey = "Flywheel/Slot0 Tunable Target RPM";
+
     /**
      * Runs the quasistatic (slow voltage ramp) SysId test, used to identify kS and kV.
      *
@@ -124,17 +133,9 @@ public class Flywheel extends SubsystemBase {
 
         // Slot0 gains for the Phoenix-native VelocityVoltage closed loop (see
         // setTargetRPM()). Applied once here rather than per-call since the
-        // configurator writes to the TalonFX over CAN.
-        Slot0Configs slot0Configs = new Slot0Configs();
-        slot0Configs.kS = kFlywheelSlot0_kS;
-        slot0Configs.kV = kFlywheelSlot0_kV;
-        slot0Configs.kP = kFlywheelSlot0_kP;
-        slot0Configs.kI = kFlywheelSlot0_kI;
-        slot0Configs.kD = kFlywheelSlot0_kD;
-        StatusCode slot0Status = m_flywheelMotor.getConfigurator().apply(slot0Configs);
-        if (!slot0Status.isOK()) {
-            System.out.println("Flywheel Slot0Configs apply failed: " + slot0Status.toString());
-        }
+        // configurator writes to the TalonFX over CAN. kP is re-applied later
+        // in periodic() if it's changed on SmartDashboard (see applySlot0kP()).
+        applySlot0kP(kFlywheelSlot0_kP);
 
         m_sysIdRoutine = new SysIdRoutine(
             new SysIdRoutine.Config(), // default ramp rate/step voltage/timeout — tune later if needed
@@ -243,6 +244,29 @@ public class Flywheel extends SubsystemBase {
         m_flywheelMotor.setControl(m_velocityRequest.withVelocity(rpm / 60.0));
     }
 
+    /**
+     * Rebuilds Slot0Configs with the given kP (kS/kV/kI/kD unchanged from
+     * Constants) and re-applies it to the TalonFX. Called once from the
+     * constructor with the Constants default, and again from periodic()
+     * whenever the SmartDashboard-tunable kP value changes, so kP can be
+     * tuned live without redeploying code.
+     *
+     * @param kP proportional gain to write to Slot0
+     */
+    private void applySlot0kP(double kP) {
+        Slot0Configs slot0Configs = new Slot0Configs();
+        slot0Configs.kS = kFlywheelSlot0_kS;
+        slot0Configs.kV = kFlywheelSlot0_kV;
+        slot0Configs.kP = kP;
+        slot0Configs.kI = kFlywheelSlot0_kI;
+        slot0Configs.kD = kFlywheelSlot0_kD;
+        StatusCode slot0Status = m_flywheelMotor.getConfigurator().apply(slot0Configs);
+        if (!slot0Status.isOK()) {
+            System.out.println("Flywheel Slot0Configs apply failed: " + slot0Status.toString());
+        }
+        m_lastAppliedSlot0kP = kP;
+    }
+
     /** Commands zero output, stopping the flywheel. */
     public void stop() {
         m_flywheelMotor.stopMotor();
@@ -268,6 +292,18 @@ public class Flywheel extends SubsystemBase {
         return run(() -> setTargetRPM(rpm))
             .finallyDo(() -> stop())
             .withName("runAtRPM");
+    }
+
+    /**
+     * Command factory: like runAtRPM(), but reads its target velocity from
+     * the SmartDashboard-tunable "Flywheel/Slot0 Tunable Target RPM" entry
+     * each cycle instead of a fixed value, for live tuning on the bench.
+     */
+    public Command runAtTunableRPM() {
+        return run(() -> setTargetRPM(
+                SmartDashboard.getNumber(kTunableSlot0TargetRPMKey, kFlywheelDefaultTargetRPM)))
+            .finallyDo(() -> stop())
+            .withName("runAtTunableRPM");
     }
 
 
@@ -314,6 +350,17 @@ public class Flywheel extends SubsystemBase {
         SmartDashboard.putNumber("Flywheel/Target Velocity (RPM)", m_targetRPS * 60.0);
         SmartDashboard.putNumber("Flywheel/Slot0 Target Velocity (RPM)", m_lastSlot0TargetRPM);
         SmartDashboard.putNumber("Flywheel/Slot0 Measured Velocity (RPM)", getVelocityRPM());
+
+        // 3. Live-tunable Slot0 kP and target RPM: publish defaults the first
+        //    time (getNumber falls back to the given default if the key isn't
+        //    present yet), then re-apply kP to the TalonFX if it was edited.
+        SmartDashboard.putNumber(kTunableSlot0TargetRPMKey,
+            SmartDashboard.getNumber(kTunableSlot0TargetRPMKey, kFlywheelDefaultTargetRPM));
+        double tunableKP = SmartDashboard.getNumber(kTunableSlot0kPKey, kFlywheelSlot0_kP);
+        SmartDashboard.putNumber(kTunableSlot0kPKey, tunableKP);
+        if (tunableKP != m_lastAppliedSlot0kP) {
+            applySlot0kP(tunableKP);
+        }
         SmartDashboard.putNumber("Flywheel/Applied Voltage (V)", appliedVoltage);
         SmartDashboard.putNumber("Flywheel/Actual Velocity (RPS)", actualVelocityRPS);
         SmartDashboard.putNumber("Flywheel/Actual Velocity (RPM)", actualVelocityRPS * 60.0);
