@@ -91,6 +91,10 @@ public class Flywheel extends SubsystemBase {
     // with .withVelocity()/.withSlot() instead of constructing new ones.
     private final VelocityVoltage m_velocityRequest = new VelocityVoltage(0).withSlot(0);
 
+    // Last RPM passed to setTargetRPM(), kept only so periodic() can log
+    // target vs. measured velocity for the Slot0/VelocityVoltage path.
+    private double m_lastSlot0TargetRPM = 0.0;
+
     /**
      * Runs the quasistatic (slow voltage ramp) SysId test, used to identify kS and kV.
      *
@@ -235,6 +239,7 @@ public class Flywheel extends SubsystemBase {
      *            rotations per second, hence the divide by 60
      */
     public void setTargetRPM(double rpm) {
+        m_lastSlot0TargetRPM = rpm;
         m_flywheelMotor.setControl(m_velocityRequest.withVelocity(rpm / 60.0));
     }
 
@@ -307,6 +312,8 @@ public class Flywheel extends SubsystemBase {
         //    voltage/velocity/current.
         SmartDashboard.putNumber("Flywheel/Commanded Duty Cycle", m_currentDutyCycle);
         SmartDashboard.putNumber("Flywheel/Target Velocity (RPM)", m_targetRPS * 60.0);
+        SmartDashboard.putNumber("Flywheel/Slot0 Target Velocity (RPM)", m_lastSlot0TargetRPM);
+        SmartDashboard.putNumber("Flywheel/Slot0 Measured Velocity (RPM)", getVelocityRPM());
         SmartDashboard.putNumber("Flywheel/Applied Voltage (V)", appliedVoltage);
         SmartDashboard.putNumber("Flywheel/Actual Velocity (RPS)", actualVelocityRPS);
         SmartDashboard.putNumber("Flywheel/Actual Velocity (RPM)", actualVelocityRPS * 60.0);
