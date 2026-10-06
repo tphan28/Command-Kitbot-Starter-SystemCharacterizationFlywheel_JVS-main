@@ -86,6 +86,11 @@ public class Flywheel extends SubsystemBase {
     // setDutyCycleCommand(), and applied continuously by runShooterComrmand().
     private double m_currentDutyCycle = kFlywheelDefaultDutyCycle;
 
+    // Reused across setTargetRPM() calls rather than allocated per-call — the
+    // Phoenix docs call out building control requests once and mutating them
+    // with .withVelocity()/.withSlot() instead of constructing new ones.
+    private final VelocityVoltage m_velocityRequest = new VelocityVoltage(0).withSlot(0);
+
     /**
      * Runs the quasistatic (slow voltage ramp) SysId test, used to identify kS and kV.
      *
@@ -218,6 +223,46 @@ public class Flywheel extends SubsystemBase {
         return runOnce(() -> {
             m_targetRPS = MathUtil.clamp(targetRPM, 0.0, kFlywheelMaxRPM) / 60.0;
         });
+    }
+
+    /**
+     * Commands the flywheel directly to a target velocity using the TalonFX's
+     * onboard Slot0 controller (kS/kV/kP/kI/kD applied in the constructor),
+     * rather than the WPILib PIDController/SimpleMotorFeedforward path above.
+     * Call this repeatedly (e.g. from a command's execute()) to hold a speed.
+     *
+     * @param rpm desired velocity in rotations per minute; the TalonFX takes
+     *            rotations per second, hence the divide by 60
+     */
+    public void setTargetRPM(double rpm) {
+        m_flywheelMotor.setControl(m_velocityRequest.withVelocity(rpm / 60.0));
+    }
+
+    /** Commands zero output, stopping the flywheel. */
+    public void stop() {
+        m_flywheelMotor.stopMotor();
+    }
+
+    /**
+     * @return current flywheel velocity in rotations per minute, read from the
+     *         TalonFX (motor-shaft speed; does not account for any gear ratio)
+     */
+    public double getVelocityRPM() {
+        return m_flywheelMotor.getVelocity().getValueAsDouble() * 60.0;
+    }
+
+    /**
+     * Command factory: drives the flywheel to a fixed target velocity using
+     * the Slot0/VelocityVoltage path while it runs, and stops the flywheel
+     * when the command ends (interrupted or otherwise) so a button release
+     * doesn't leave it spinning.
+     *
+     * @param rpm target velocity in rotations per minute
+     */
+    public Command runAtRPM(double rpm) {
+        return run(() -> setTargetRPM(rpm))
+            .finallyDo(() -> stop())
+            .withName("runAtRPM");
     }
 
 
