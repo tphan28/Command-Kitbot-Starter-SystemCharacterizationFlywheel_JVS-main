@@ -69,6 +69,12 @@ public class RobotContainer {
         m_driverController.start().and(m_driverController.a())
             .whileTrue(m_flywheel.sysIdDynamic(SysIdRoutine.Direction.kReverse));
 
+        // Fixed-RPM presets for bench testing the Slot0/VelocityVoltage closed
+        // loop (Flywheel.runAtRPM()) while gains are being tuned.
+        m_driverController.leftBumper().whileTrue(m_flywheel.runAtRPM(1000));
+        m_driverController.rightBumper().whileTrue(m_flywheel.runAtRPM(1500));
+        m_driverController.x().whileTrue(m_flywheel.runAtRPM(2000));
+
     }
 
     /**
