@@ -90,10 +90,33 @@ public final class Constants {
         public static final double kFlywheel_kA = 0.0;
 
         // feedback PID controller parameters
-        // TO DO: replace these 0s with values determined from SysID 
+        // TO DO: replace these 0s with values determined from SysID
         public static final double kFlywheel_kP = 0.0;
         public static final double kFlywheel_kI = 0.0;
         public static final double kFlywheel_kD = 0.0;
+
+        // Gains for the Phoenix-native closed-loop path (TalonFX Slot0 +
+        // VelocityVoltage in Flywheel's constructor/setTargetRPM()). Kept
+        // separate from kFlywheel_kS/kV/kA/kP/kI/kD above, which belong to the
+        // older WPILib PIDController/SimpleMotorFeedforward closed-loop path.
+        //
+        // kS and kV came from a SysId run fit in rotations and rotations per
+        // second (TalonFX's native units), not meters or radians — re-run SysId
+        // and update these two whenever gearing, wheel, or motor count changes.
+        public static final double kFlywheelSlot0_kS = 0.049151;
+        public static final double kFlywheelSlot0_kV = 0.11595;
+        // Starting point only — tune this by hand against real hardware.
+        public static final double kFlywheelSlot0_kP = 0.1;
+        public static final double kFlywheelSlot0_kI = 0.0;
+        public static final double kFlywheelSlot0_kD = 0.0;
+
+        // Simulation-only plant model (gear ratio + moment of inertia) so the
+        // TalonFX has something to spin against in simulationPeriodic(). These
+        // are guesses, not measurements — a sim-based SysId fit characterizes
+        // THIS made-up plant, not a real flywheel. Fine for verifying the SysId
+        // and PID code paths work; not valid for a physical robot.
+        public static final double kFlywheelSimGearRatio = 1.0;
+        public static final double kFlywheelSimMOIKgMetersSquared = 0.001;
 
         // ======= intake constants ==========
         public static final int kIntakeMotorCurrentLimit = 60;
