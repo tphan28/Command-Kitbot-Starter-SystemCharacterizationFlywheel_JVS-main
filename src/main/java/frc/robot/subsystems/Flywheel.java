@@ -4,6 +4,7 @@
 
 package frc.robot.subsystems;
 
+import com.ctre.phoenix6.SignalLogger;
 import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
@@ -136,6 +137,12 @@ public class Flywheel extends SubsystemBase {
         // configurator writes to the TalonFX over CAN. kP is re-applied later
         // in periodic() if it's changed on SmartDashboard (see applySlot0kP()).
         applySlot0kP(kFlywheelSlot0_kP);
+
+        // CTRE's own logger (separate from the DataLogManager/.wpilog that
+        // SysIdRoutine writes into — see Robot.java). Started here so the
+        // Slot0 target/measured RPM and applied voltage logged in periodic()
+        // land in a .hoot file viewable in Tuner X alongside other signals.
+        SignalLogger.start();
 
         m_sysIdRoutine = new SysIdRoutine(
             new SysIdRoutine.Config(), // default ramp rate/step voltage/timeout — tune later if needed
@@ -350,6 +357,10 @@ public class Flywheel extends SubsystemBase {
         SmartDashboard.putNumber("Flywheel/Target Velocity (RPM)", m_targetRPS * 60.0);
         SmartDashboard.putNumber("Flywheel/Slot0 Target Velocity (RPM)", m_lastSlot0TargetRPM);
         SmartDashboard.putNumber("Flywheel/Slot0 Measured Velocity (RPM)", getVelocityRPM());
+        SmartDashboard.putNumber("Flywheel/Slot0 Applied Voltage (V)", appliedVoltage);
+        SignalLogger.writeDouble("Flywheel/Slot0 Target Velocity (RPM)", m_lastSlot0TargetRPM);
+        SignalLogger.writeDouble("Flywheel/Slot0 Measured Velocity (RPM)", getVelocityRPM());
+        SignalLogger.writeDouble("Flywheel/Slot0 Applied Voltage (V)", appliedVoltage);
 
         // 3. Live-tunable Slot0 kP and target RPM: publish defaults the first
         //    time (getNumber falls back to the given default if the key isn't
